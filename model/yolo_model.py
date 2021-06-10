@@ -1,12 +1,12 @@
 """YOLO v3 output
 """
 import numpy as np
-import keras.backend as K
-from keras.models import load_model
-
+# import keras.backend as K
+# from keras.models import load_model
+import cv2
 
 class YOLO:
-    def __init__(self, obj_threshold, nms_threshold):
+    def __init__(self, obj_threshold, nms_threshold, cfg, wts, classes):
         """Init.
 
         # Arguments
@@ -15,182 +15,192 @@ class YOLO:
         """
         self._t1 = obj_threshold
         self._t2 = nms_threshold
-        self._yolo = load_model('data/yolo.h5')
+        # self._yolo = load_model('data/yolo.h5')
+        
+        ###
+        self.classes = classes
+        self.net = cv2.dnn.readNetFromDarknet(cfg, wts)
+        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+        self.ln = self.net.getLayerNames()
+        self.ln = [self.ln[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
+        ###
 
-    def _sigmoid(self, x):
-        """sigmoid.
 
-        # Arguments
-            x: Tensor.
+    # def _sigmoid(self, x):
+    #     """sigmoid.
 
-        # Returns
-            numpy ndarray.
-        """
-        return 1 / (1 + np.exp(-x))
+    #     # Arguments
+    #         x: Tensor.
 
-    def _process_feats(self, out, anchors, mask):
-        """process output features.
+    #     # Returns
+    #         numpy ndarray.
+    #     """
+    #     return 1 / (1 + np.exp(-x))
 
-        # Arguments
-            out: Tensor (N, N, 3, 4 + 1 +80), output feature map of yolo.
-            anchors: List, anchors for box.
-            mask: List, mask for anchors.
+    # def _process_feats(self, out, anchors, mask):
+    #     """process output features.
 
-        # Returns
-            boxes: ndarray (N, N, 3, 4), x,y,w,h for per box.
-            box_confidence: ndarray (N, N, 3, 1), confidence for per box.
-            box_class_probs: ndarray (N, N, 3, 80), class probs for per box.
-        """
-        grid_h, grid_w, num_boxes = map(int, out.shape[1: 4])
+    #     # Arguments
+    #         out: Tensor (N, N, 3, 4 + 1 +80), output feature map of yolo.
+    #         anchors: List, anchors for box.
+    #         mask: List, mask for anchors.
 
-        anchors = [anchors[i] for i in mask]
-        anchors_tensor = np.array(anchors).reshape(1, 1, len(anchors), 2)
+    #     # Returns
+    #         boxes: ndarray (N, N, 3, 4), x,y,w,h for per box.
+    #         box_confidence: ndarray (N, N, 3, 1), confidence for per box.
+    #         box_class_probs: ndarray (N, N, 3, 80), class probs for per box.
+    #     """
+    #     grid_h, grid_w, num_boxes = map(int, out.shape[1: 4])
 
-        # Reshape to batch, height, width, num_anchors, box_params.
-        out = out[0]
-        box_xy = self._sigmoid(out[..., :2])
-        box_wh = np.exp(out[..., 2:4])
-        box_wh = box_wh * anchors_tensor
+    #     anchors = [anchors[i] for i in mask]
+    #     anchors_tensor = np.array(anchors).reshape(1, 1, len(anchors), 2)
 
-        box_confidence = self._sigmoid(out[..., 4])
-        box_confidence = np.expand_dims(box_confidence, axis=-1)
-        box_class_probs = self._sigmoid(out[..., 5:])
+    #     # Reshape to batch, height, width, num_anchors, box_params.
+    #     out = out[0]
+    #     box_xy = self._sigmoid(out[..., :2])
+    #     box_wh = np.exp(out[..., 2:4])
+    #     box_wh = box_wh * anchors_tensor
 
-        col = np.tile(np.arange(0, grid_w), grid_w).reshape(-1, grid_w)
-        row = np.tile(np.arange(0, grid_h).reshape(-1, 1), grid_h)
+    #     box_confidence = self._sigmoid(out[..., 4])
+    #     box_confidence = np.expand_dims(box_confidence, axis=-1)
+    #     box_class_probs = self._sigmoid(out[..., 5:])
 
-        col = col.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
-        row = row.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
-        grid = np.concatenate((col, row), axis=-1)
+    #     col = np.tile(np.arange(0, grid_w), grid_w).reshape(-1, grid_w)
+    #     row = np.tile(np.arange(0, grid_h).reshape(-1, 1), grid_h)
 
-        box_xy += grid
-        box_xy /= (grid_w, grid_h)
-        box_wh /= (416, 416)
-        box_xy -= (box_wh / 2.)
-        boxes = np.concatenate((box_xy, box_wh), axis=-1)
+    #     col = col.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
+    #     row = row.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
+    #     grid = np.concatenate((col, row), axis=-1)
 
-        return boxes, box_confidence, box_class_probs
+    #     box_xy += grid
+    #     box_xy /= (grid_w, grid_h)
+    #     box_wh /= (416, 416)
+    #     box_xy -= (box_wh / 2.)
+    #     boxes = np.concatenate((box_xy, box_wh), axis=-1)
 
-    def _filter_boxes(self, boxes, box_confidences, box_class_probs):
-        """Filter boxes with object threshold.
+    #     return boxes, box_confidence, box_class_probs
 
-        # Arguments
-            boxes: ndarray, boxes of objects.
-            box_confidences: ndarray, confidences of objects.
-            box_class_probs: ndarray, class_probs of objects.
+    # def _filter_boxes(self, boxes, box_confidences, box_class_probs):
+    #     """Filter boxes with object threshold.
 
-        # Returns
-            boxes: ndarray, filtered boxes.
-            classes: ndarray, classes for boxes.
-            scores: ndarray, scores for boxes.
-        """
-        box_scores = box_confidences * box_class_probs
-        box_classes = np.argmax(box_scores, axis=-1)
-        box_class_scores = np.max(box_scores, axis=-1)
-        pos = np.where(box_class_scores >= self._t1)
+    #     # Arguments
+    #         boxes: ndarray, boxes of objects.
+    #         box_confidences: ndarray, confidences of objects.
+    #         box_class_probs: ndarray, class_probs of objects.
 
-        boxes = boxes[pos]
-        classes = box_classes[pos]
-        scores = box_class_scores[pos]
+    #     # Returns
+    #         boxes: ndarray, filtered boxes.
+    #         classes: ndarray, classes for boxes.
+    #         scores: ndarray, scores for boxes.
+    #     """
+    #     box_scores = box_confidences * box_class_probs
+    #     box_classes = np.argmax(box_scores, axis=-1)
+    #     box_class_scores = np.max(box_scores, axis=-1)
+    #     pos = np.where(box_class_scores >= self._t1)
 
-        return boxes, classes, scores
+    #     boxes = boxes[pos]
+    #     classes = box_classes[pos]
+    #     scores = box_class_scores[pos]
 
-    def _nms_boxes(self, boxes, scores):
-        """Suppress non-maximal boxes.
+    #     return boxes, classes, scores
 
-        # Arguments
-            boxes: ndarray, boxes of objects.
-            scores: ndarray, scores of objects.
+    # def _nms_boxes(self, boxes, scores):
+    #     """Suppress non-maximal boxes.
 
-        # Returns
-            keep: ndarray, index of effective boxes.
-        """
-        x = boxes[:, 0]
-        y = boxes[:, 1]
-        w = boxes[:, 2]
-        h = boxes[:, 3]
+    #     # Arguments
+    #         boxes: ndarray, boxes of objects.
+    #         scores: ndarray, scores of objects.
 
-        areas = w * h
-        order = scores.argsort()[::-1]
+    #     # Returns
+    #         keep: ndarray, index of effective boxes.
+    #     """
+    #     x = boxes[:, 0]
+    #     y = boxes[:, 1]
+    #     w = boxes[:, 2]
+    #     h = boxes[:, 3]
 
-        keep = []
-        while order.size > 0:
-            i = order[0]
-            keep.append(i)
+    #     areas = w * h
+    #     order = scores.argsort()[::-1]
 
-            xx1 = np.maximum(x[i], x[order[1:]])
-            yy1 = np.maximum(y[i], y[order[1:]])
-            xx2 = np.minimum(x[i] + w[i], x[order[1:]] + w[order[1:]])
-            yy2 = np.minimum(y[i] + h[i], y[order[1:]] + h[order[1:]])
+    #     keep = []
+    #     while order.size > 0:
+    #         i = order[0]
+    #         keep.append(i)
 
-            w1 = np.maximum(0.0, xx2 - xx1 + 1)
-            h1 = np.maximum(0.0, yy2 - yy1 + 1)
-            inter = w1 * h1
+    #         xx1 = np.maximum(x[i], x[order[1:]])
+    #         yy1 = np.maximum(y[i], y[order[1:]])
+    #         xx2 = np.minimum(x[i] + w[i], x[order[1:]] + w[order[1:]])
+    #         yy2 = np.minimum(y[i] + h[i], y[order[1:]] + h[order[1:]])
 
-            ovr = inter / (areas[i] + areas[order[1:]] - inter)
-            inds = np.where(ovr <= self._t2)[0]
-            order = order[inds + 1]
+    #         w1 = np.maximum(0.0, xx2 - xx1 + 1)
+    #         h1 = np.maximum(0.0, yy2 - yy1 + 1)
+    #         inter = w1 * h1
 
-        keep = np.array(keep)
+    #         ovr = inter / (areas[i] + areas[order[1:]] - inter)
+    #         inds = np.where(ovr <= self._t2)[0]
+    #         order = order[inds + 1]
 
-        return keep
+    #     keep = np.array(keep)
 
-    def _yolo_out(self, outs, shape):
-        """Process output of yolo base net.
+    #     return keep
 
-        # Argument:
-            outs: output of yolo base net.
-            shape: shape of original image.
+    # def _yolo_out(self, outs, shape):
+    #     """Process output of yolo base net.
 
-        # Returns:
-            boxes: ndarray, boxes of objects.
-            classes: ndarray, classes of objects.
-            scores: ndarray, scores of objects.
-        """
-        masks = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
-        anchors = [[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
-                   [59, 119], [116, 90], [156, 198], [373, 326]]
+    #     # Argument:
+    #         outs: output of yolo base net.
+    #         shape: shape of original image.
 
-        boxes, classes, scores = [], [], []
+    #     # Returns:
+    #         boxes: ndarray, boxes of objects.
+    #         classes: ndarray, classes of objects.
+    #         scores: ndarray, scores of objects.
+    #     """
+    #     masks = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
+    #     anchors = [[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
+    #                [59, 119], [116, 90], [156, 198], [373, 326]]
 
-        for out, mask in zip(outs, masks):
-            b, c, s = self._process_feats(out, anchors, mask)
-            b, c, s = self._filter_boxes(b, c, s)
-            boxes.append(b)
-            classes.append(c)
-            scores.append(s)
+    #     boxes, classes, scores = [], [], []
 
-        boxes = np.concatenate(boxes)
-        classes = np.concatenate(classes)
-        scores = np.concatenate(scores)
+    #     for out, mask in zip(outs, masks):
+    #         b, c, s = self._process_feats(out, anchors, mask)
+    #         b, c, s = self._filter_boxes(b, c, s)
+    #         boxes.append(b)
+    #         classes.append(c)
+    #         scores.append(s)
 
-        # Scale boxes back to original image shape.
-        width, height = shape[1], shape[0]
-        image_dims = [width, height, width, height]
-        boxes = boxes * image_dims
+    #     boxes = np.concatenate(boxes)
+    #     classes = np.concatenate(classes)
+    #     scores = np.concatenate(scores)
 
-        nboxes, nclasses, nscores = [], [], []
-        for c in set(classes):
-            inds = np.where(classes == c)
-            b = boxes[inds]
-            c = classes[inds]
-            s = scores[inds]
+    #     # Scale boxes back to original image shape.
+    #     width, height = shape[1], shape[0]
+    #     image_dims = [width, height, width, height]
+    #     boxes = boxes * image_dims
 
-            keep = self._nms_boxes(b, s)
+    #     nboxes, nclasses, nscores = [], [], []
+    #     for c in set(classes):
+    #         inds = np.where(classes == c)
+    #         b = boxes[inds]
+    #         c = classes[inds]
+    #         s = scores[inds]
 
-            nboxes.append(b[keep])
-            nclasses.append(c[keep])
-            nscores.append(s[keep])
+    #         keep = self._nms_boxes(b, s)
 
-        if not nclasses and not nscores:
-            return None, None, None
+    #         nboxes.append(b[keep])
+    #         nclasses.append(c[keep])
+    #         nscores.append(s[keep])
 
-        boxes = np.concatenate(nboxes)
-        classes = np.concatenate(nclasses)
-        scores = np.concatenate(nscores)
+    #     if not nclasses and not nscores:
+    #         return None, None, None
 
-        return boxes, classes, scores
+    #     boxes = np.concatenate(nboxes)
+    #     classes = np.concatenate(nclasses)
+    #     scores = np.concatenate(nscores)
 
+    #     return boxes, classes, scores
+
+    # def predict(self, image, shape):
     def predict(self, image, shape):
         """Detect the objects with yolo.
 
@@ -204,7 +214,48 @@ class YOLO:
             scores: ndarray, scores of objects.
         """
 
-        outs = self._yolo.predict(image)
-        boxes, classes, scores = self._yolo_out(outs, shape)
+        ###
+        conf = 0.2
+        
+        img = cv2.dnn.blobFromImage(image, 1/255.0, (416, 416), swapRB=True, crop=False)
+        
+        self.net.setInput(img)
+        outputs = self.net.forward(self.ln)
 
-        return boxes, classes, scores
+        
+        # initialize lists
+        boxes = []
+        confidences = []
+        classIDs = []
+
+        # initialize image dimensions
+        h_img, w_img = image.shape[:2]
+
+        for output in outputs:
+            for detection in output:
+                scores = detection[5:]
+                classID = np.argmax(scores)
+                confidence = scores[classID]
+
+                # drop low confidence detections and 
+                if(confidence > conf):# and classID == 0):
+                    box = detection[:4] * np.array([w_img, h_img, w_img, h_img])
+                    (centerX, centerY, width, height) = box.astype("int")
+                    x = int(centerX - (width / 2))
+                    y = int(centerY - (height / 2))
+                    box = [x, y, int(width), int(height)]
+                    boxes.append(box)
+                    confidences.append(float(confidence))
+                    classIDs.append(classID)
+        if(len(confidences) > 0):
+            best = confidences.index(max(confidences))
+            return [boxes[best]], [classIDs[best]], [confidences[best]]
+        
+        return boxes, classIDs, confidences
+        #return cls_and_box
+        ###
+
+        # outs = self._yolo.predict(image)
+        # boxes, classes, scores = self._yolo_out(outs, shape)
+
+        # return boxes, classes, scores
