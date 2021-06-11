@@ -10,6 +10,7 @@ from model.yolo_model import YOLO
 from pantilthat import *
 
 
+# Input Args/Switches
 ap = argparse.ArgumentParser()
 # ap.add_argument("-v", "--verbose", action="store_true", default=0, help="Whether or not to display location messages in terminal")
 ap.add_argument("-bbb", "--show_blue_border_box", action="store_true", default=0, help="Draws a (blue) border boundary box which can dictate camera movement. Default: Show box")
@@ -29,16 +30,30 @@ is_cascade = args.is_cascade
 is_wear_fun_hat = args.is_wear_fun_hat
 hat_path = './data/Propeller_hat.svg.med.png'
 hat_img = cv2.imread(hat_path, -1)
+# Frame dimensions vars
 FRAME_W = 0
 FRAME_H = 0
-################ BOUNDARY BOX ################
+# Boundary Box vars
 w_min = 0
 w_max = 0
 h_min = 0
 h_max = 0
-################ BOUNDARY BOX ################
+
 
 def man_move_camera(key_press):
+    """Take keystrokes to dictate camera movemement.
+
+    # Argument:
+        key_press: takes in one letter for movement 
+                    (same as gaming controls, no inversion):
+                        w: Up
+                        a: Left
+                        s: Down
+                        d: Right
+
+    # Returns
+        None
+    """    
     cam_pan = get_pan()
     cam_tilt = get_tilt()
     move_x = 0
@@ -48,15 +63,10 @@ def man_move_camera(key_press):
         move_x = -2
     elif(key_press.lower() == 'd'):
         move_x = 2
-    else:
-        move_x = 0
-    
-    if(key_press.lower() == 's'):
+    elif(key_press.lower() == 's'):
         move_y = -1
     elif(key_press.lower() == 'w'):
         move_y = 1
-    else:
-        move_y = 0
 
     if((cam_pan + move_x < 90) & (cam_pan - move_x > -90)):
         cam_pan += move_x
@@ -75,6 +85,17 @@ def man_move_camera(key_press):
     return
 
 def move_camera(x, y, w, h):
+    """Takes in object tracking coordinates and moves camera to try to "center" the subject.
+
+    # Argument:
+        x: coordinate on the x axis where subject is detected
+        y: coordinate on the y axis where subject is detected
+        w: width of object detected on screen
+        h: height of object detected on screen
+
+    # Returns
+        None
+    """
     if(is_camera_still):
         return
     
@@ -129,6 +150,8 @@ def move_camera(x, y, w, h):
             tilt(int(cam_tilt))
     else:
         print(f'MAX TILT - cannot move:  {cam_tilt + move_y}')
+    
+    return
 
 
 def process_image(img):
@@ -157,7 +180,6 @@ def get_classes(file):
 
     # Returns
         class_names: List, classes name.
-
     """
     with open(file) as f:
         class_names = f.readlines()
@@ -175,6 +197,8 @@ def draw(image, boxes, scores, classes, all_classes):
         classes: ndarray, classes of objects.
         scores: ndarray, scores of objects.
         all_classes: all classes name.
+    # Returns
+        None
     """
     for box, score, cl in zip(boxes, scores, classes):
         x, y, w, h = box
@@ -183,9 +207,6 @@ def draw(image, boxes, scores, classes, all_classes):
         left = max(0, np.floor(y + 0.5).astype(int))
         right = min(image.shape[1], np.floor(x + w + 0.5).astype(int))
         bottom = min(image.shape[0], np.floor(y + h + 0.5).astype(int))
-        
-        # if(show_boundary_box):
-        #     cv2.rectangle(image, (w_min, h_min), (w_max, h_max), (255, 0, 0), 2)
         
         if(not is_camera_still):
             move_camera(x, y, w, h)
@@ -202,16 +223,20 @@ def draw(image, boxes, scores, classes, all_classes):
         print('box coordinate x,y,w,h: {0}'.format(box))
 
     print()
+    
+    return
 
 
 # def detect_image(image, yolo, all_classes):
 def detect_image(image, yolo, all_classes, w=0, h=0):
-    """Use yolo v3 to detect images.
+    """Use yolo v4 tiny to detect images.
 
     # Argument:
         image: original image.
         yolo: YOLO, yolo model.
         all_classes: all classes name.
+        w: width of subject detected on screen
+        h: height of subject detected on screen
 
     # Returns:
         image: processed image.
@@ -238,45 +263,53 @@ def detect_image(image, yolo, all_classes, w=0, h=0):
     return image
 
 
-def detect_video(video, yolo, all_classes):
-    """Use yolo v3 to detect video.
+# def detect_video(video, yolo, all_classes):
+#     """Use yolo v4 tiny to detect video.
 
-    # Argument:
-        video: video file.
-        yolo: YOLO, yolo model.
-        all_classes: all classes name.
-    """
-    video_path = os.path.join("videos", "test", video)
-    camera = cv2.VideoCapture(video_path)
-    cv2.namedWindow("detection", cv2.WINDOW_AUTOSIZE)
+#     # Argument:
+#         video: video file.
+#         yolo: YOLO, yolo model.
+#         all_classes: all classes name.
+#     """
+#     video_path = os.path.join("videos", "test", video)
+#     camera = cv2.VideoCapture(video_path)
+#     cv2.namedWindow("detection", cv2.WINDOW_AUTOSIZE)
 
-    # Prepare for saving the detected video
-    sz = (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)),
-        int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-    fourcc = cv2.VideoWriter_fourcc(*'mpeg')
+#     # Prepare for saving the detected video
+#     sz = (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)),
+#         int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+#     fourcc = cv2.VideoWriter_fourcc(*'mpeg')
 
-    vout = cv2.VideoWriter()
-    vout.open(os.path.join("videos", "res", video), fourcc, 20, sz, True)
+#     vout = cv2.VideoWriter()
+#     vout.open(os.path.join("videos", "res", video), fourcc, 20, sz, True)
 
-    while True:
-        res, frame = camera.read()
+#     while True:
+#         res, frame = camera.read()
 
-        if not res:
-            break
+#         if not res:
+#             break
 
-        image = detect_image(frame, yolo, all_classes)
-        cv2.imshow("detection", image)
+#         image = detect_image(frame, yolo, all_classes)
+#         cv2.imshow("detection", image)
 
-        # Save the video frame by frame
-        vout.write(image)
+#         # Save the video frame by frame
+#         vout.write(image)
 
-        if cv2.waitKey(110) & 0xff == 27:
-                break
+#         if cv2.waitKey(110) & 0xff == 27:
+#                 break
 
-    vout.release()
-    camera.release()
+#     vout.release()
+#     camera.release()
     
 def reset_camera_position():
+    """Resets Camera position.
+
+    # Argument:
+        None
+
+    # Returns:
+        None
+    """
     pan(0)
     tilt(-20)
     time.sleep(2)
@@ -284,12 +317,19 @@ def reset_camera_position():
 
 
 if __name__ == '__main__':
+    """Main Function.
+
+    # Argument:
+        None
+
+    # Returns:
+        None
+    """
     cfg_file = 'data/custom-yolov4-tiny-detector.cfg'
     weights_file = 'data/custom-yolov4-tiny-detector_best.weights'
-    # yolo = YOLO(0.6, 0.5)
     file = 'data/custom-yolov4-tiny-detector.names'
     all_classes = get_classes(file)
-    yolo = YOLO(0.6, 0.5, cfg_file, weights_file, all_classes)
+    yolo = YOLO(cfg_file, weights_file)
 
     # Turn the camera to the default position
     reset_camera_position()
@@ -298,6 +338,7 @@ if __name__ == '__main__':
     cap = cv2.VideoCapture(0) # Primary, Laptop Camera or rpi Camera
     # cap = cv2.VideoCapture(1) # Secondary, Monitor Camera
 
+    # SET GLOBALS
     FRAME_W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) #width
     FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) #height
     ################ BOUNDARY BOX ################
@@ -308,12 +349,13 @@ if __name__ == '__main__':
     # h_min = int(5)
     ################ BOUNDARY BOX ################
 
-    # cascPath = 'C:\ProgramData\Anaconda3\envs\opencv\Lib\site-packages\cv2\data\haarcascade_frontalface_default.xml'
     cascPath = '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
     faceCascade = cv2.CascadeClassifier(cascPath)
 
     prev_time = time.time()
     show_detect_ok = False
+    
+    count = 0
 
     while True:
         ret, frame = cap.read()
@@ -323,14 +365,10 @@ if __name__ == '__main__':
         
         # Vertical flip for camera orientation (Ribbon on top of camera)
         frame = cv2.flip(frame, 0)
-        # Horizontal-Flip for  Mirror-Image
-        # frame = cv2.flip(frame, 1)
 
         if(is_cascade):# | args.is_cascade):
             faces = faceCascade.detectMultiScale(frame, 1.1, 3)
             for (x, y, w, h) in faces:
-                # if(show_person_box):
-                #     cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 ################## HAT ##################
                 # https://stackoverflow.com/questions/14063070/overlay-a-smaller-image-on-a-larger-image-python-opencv
                 if(is_wear_fun_hat):
@@ -338,7 +376,7 @@ if __name__ == '__main__':
                         resize_x = int(w*1.1)
                         resize_y = int(w*2/3)
                         overlay = cv2.resize(hat_img, (resize_x, resize_y), interpolation = cv2.INTER_AREA)
-                        # overlay = cv2.resize(overlay, (170, 100),interpolation = cv2.INTER_AREA)
+                        # overlay = cv2.resize(overlay, (170, 100),interpolation = cv2.INTER_AREA) # Fixed size
                         x_offset = x - 10
                         y_offset = y - (h//2)
                         y1, y2 = y_offset, y_offset + overlay.shape[0]
@@ -347,7 +385,7 @@ if __name__ == '__main__':
                         alpha_l = 1.0 - alpha_s
                         for c in range (0, 3):
                             frame[y1:y2, x1:x2, c] = (alpha_s * overlay[:, :, c] + alpha_l * frame[y1:y2, x1:x2, c])
-                        # OLD
+                        # Draw hat without transparency
                         # x_offset = y_offset = 50
                         # frame[y_offset:y_offset+overlay.shape[0], x_offset:x_offset+overlay.shape[1]] = overlay
                     except:
@@ -365,10 +403,22 @@ if __name__ == '__main__':
                 break
 
             frame = cv2.resize(frame, (FRAME_W,FRAME_H))
+            # count += 1
+            # if(count == 20):
+            #     is_cascade = False
         else:
             # IS YOLO
+            # if(count == 20):
+            #     is_cascade = True
+            #     count = 0
+            #     tmp_box = show_person_box
+            #     show_person_box = False
+            #     frame = detect_image(frame, yolo, all_classes, FRAME_W,FRAME_H)
+            #     show_person_box = tmp_box
+            # else:
             frame = detect_image(frame, yolo, all_classes, FRAME_W,FRAME_H)
         
+        # Show stats, e.g. camera tracking on, positions, model, etc.
         if(show_text):
             nerd_text1 = f'Nerd Stats: x: {x}, y: {y}, w: {w}, h: {h}'
             cv2.putText(frame, nerd_text1,
@@ -389,8 +439,10 @@ if __name__ == '__main__':
         if(show_boundary_box):
             cv2.rectangle(frame, (w_min, h_min), (w_max, h_max), (255, 0, 0), 2)
 
+        # Show Frame!
         cv2.imshow('Video', frame)
         
+        # Take input for features
         key_stroke = cv2.waitKey(1)
         
         if key_stroke & 0xFF == ord('q'):
@@ -425,6 +477,7 @@ if __name__ == '__main__':
             show_text = not show_text
         
         prev_time = time.time()
-
+    
+    # Release/Destroy resources when finished
     cap.release()
     cv2.destroyAllWindows()
