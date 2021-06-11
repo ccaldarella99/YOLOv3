@@ -262,44 +262,6 @@ def detect_image(image, yolo, all_classes, w=0, h=0):
 
     return image
 
-
-# def detect_video(video, yolo, all_classes):
-#     """Use yolo v4 tiny to detect video.
-
-#     # Argument:
-#         video: video file.
-#         yolo: YOLO, yolo model.
-#         all_classes: all classes name.
-#     """
-#     video_path = os.path.join("videos", "test", video)
-#     camera = cv2.VideoCapture(video_path)
-#     cv2.namedWindow("detection", cv2.WINDOW_AUTOSIZE)
-
-#     # Prepare for saving the detected video
-#     sz = (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)),
-#         int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-#     fourcc = cv2.VideoWriter_fourcc(*'mpeg')
-
-#     vout = cv2.VideoWriter()
-#     vout.open(os.path.join("videos", "res", video), fourcc, 20, sz, True)
-
-#     while True:
-#         res, frame = camera.read()
-
-#         if not res:
-#             break
-
-#         image = detect_image(frame, yolo, all_classes)
-#         cv2.imshow("detection", image)
-
-#         # Save the video frame by frame
-#         vout.write(image)
-
-#         if cv2.waitKey(110) & 0xff == 27:
-#                 break
-
-#     vout.release()
-#     camera.release()
     
 def reset_camera_position():
     """Resets Camera position.
