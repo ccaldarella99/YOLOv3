@@ -21,6 +21,7 @@ args = ap.parse_args()
 
 
 # GLOBALS
+show_text = False
 show_boundary_box = args.show_blue_border_box
 show_person_box = args.show_person_box
 is_camera_still = args.still_camera
@@ -81,37 +82,53 @@ def move_camera(x, y, w, h):
     cam_tilt = get_tilt()
     move_x = 2
     move_y = 1
+    yolo_offset = 0 if is_cascade else (h_min * -0.75)
     
-    # if(args.verbose):
-    #     print(cam_pan, cam_tilt, x, y, x+w, y+h)
-
-    if((cam_pan + move_x < 90) & (cam_pan - move_x > -90)):
-        if(x + w > w_max):
-            # if(args.verbose):
-            #     print(f'x + w: {x + w} > w_max: {w_max}')
-            cam_pan -= move_x
-            pan(int(cam_pan))
-        elif(x < w_min):
-            # if(args.verbose):
-            #     print(f'x: {x} + w: {w}, ({x + w}) < w_min: {w_min}')
+    if(((x + w)*0.95 > w_max) & (x*0.95 < w_min)):
+        # If both subject borders take up 95% or
+        # more of the boundary box, do nothing
+        pass
+    elif(w > (w_max - w_min)*0.95):
+        # If subject border-length take up 95% (not centered)
+        # or more of the boundary box, correct movement by aligning centers
+        if(x + w/2 > (FRAME_W + w_min)/2):
             cam_pan += move_x
             pan(int(cam_pan))
-    # elif(args.verbose):
-    #     print(f'MAX PAN - cannot move:  {cam_pan + move_x}')
+        elif(x - w/2 < (FRAME_W - w_min)/2):
+            cam_pan -= move_x
+            pan(int(cam_pan))
+    elif((cam_pan + move_x < 90) & (cam_pan - move_x > -90)):
+        if(x + w > w_max):
+            cam_pan += move_x
+            pan(int(cam_pan))
+        elif(x < w_min):
+            cam_pan -= move_x
+            pan(int(cam_pan))
+    else:
+        print(f'MAX PAN - cannot move:  {cam_pan + move_x}')
 
-    if((cam_tilt + move_y < 90) & (cam_tilt - move_y > -90)):
-        if(y + h > h_max):
-            # if(args.verbose):
-            #     print(f'y + h: {y + h} > h_max: {h_max}')
+    if(((y + h)*0.95 > h_max) & (y*0.95 < h_min)):
+        # If both subject borders take up 95% or
+        # more of the boundary box, do nothing
+        pass
+    elif(h > (h_max - h_min)*0.95):
+        # If subject border-length take up 95% (not centered)
+        # or more of the boundary box, correct movement by aligning centers
+        if(y + h/2 > (FRAME_H + h_min)/2):
             cam_tilt += move_y
             tilt(int(cam_tilt))
-        elif(y < h_min):
-            # if(args.verbose):
-            #     print(f'y: {y} + h: {h}, ({y + h}) < h_min: {h_min}')
+        elif(y - h/2 < (FRAME_H - h_min)/2):
             cam_tilt -= move_y
             tilt(int(cam_tilt))
-    # elif(args.verbose):
-    #     print(f'MAX TILT - cannot move:  {cam_tilt + move_y}')
+    elif((cam_tilt + move_y < 90) & (cam_tilt - move_y > -90)):
+        if(y + h > h_max):
+            cam_tilt += move_y
+            tilt(int(cam_tilt))
+        elif(y < h_min + yolo_offset):
+            cam_tilt -= move_y
+            tilt(int(cam_tilt))
+    else:
+        print(f'MAX TILT - cannot move:  {cam_tilt + move_y}')
 
 
 def process_image(img):
@@ -167,8 +184,8 @@ def draw(image, boxes, scores, classes, all_classes):
         right = min(image.shape[1], np.floor(x + w + 0.5).astype(int))
         bottom = min(image.shape[0], np.floor(y + h + 0.5).astype(int))
         
-        if(show_boundary_box):
-            cv2.rectangle(image, (w_min, h_min), (w_max, h_max), (255, 0, 0), 2)
+        # if(show_boundary_box):
+        #     cv2.rectangle(image, (w_min, h_min), (w_max, h_max), (255, 0, 0), 2)
         
         if(not is_camera_still):
             move_camera(x, y, w, h)
@@ -307,7 +324,7 @@ if __name__ == '__main__':
         # Vertical flip for camera orientation (Ribbon on top of camera)
         frame = cv2.flip(frame, 0)
         # Horizontal-Flip for  Mirror-Image
-        frame = cv2.flip(frame, 1)
+        # frame = cv2.flip(frame, 1)
 
         if(is_cascade):# | args.is_cascade):
             faces = faceCascade.detectMultiScale(frame, 1.1, 3)
@@ -347,14 +364,30 @@ if __name__ == '__main__':
                     move_camera(x, y, w, h)
                 break
 
-            ################ BOUNDARY BOX ################
-            if(show_boundary_box):
-                cv2.rectangle(frame, (w_min, h_min), (w_max, h_max), (255, 0, 0), 2)
-
             frame = cv2.resize(frame, (FRAME_W,FRAME_H))
         else:
             # IS YOLO
             frame = detect_image(frame, yolo, all_classes, FRAME_W,FRAME_H)
+        
+        if(show_text):
+            nerd_text1 = f'Nerd Stats: x: {x}, y: {y}, w: {w}, h: {h}'
+            cv2.putText(frame, nerd_text1,
+                (10, 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6, (192, 96, 0), 1,
+                cv2.LINE_AA)
+            casc_txt = 'Method: Haar Cascade, ' if is_cascade else 'Method: YOLO, '
+            cam_mov_txt = 'Camera Move: Manual Only' if is_camera_still else 'Camera Move: Auto+'
+            nerd_text2 = casc_txt + cam_mov_txt
+            cv2.putText(frame, nerd_text2,
+                (10, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6, (96, 96, 96), 1,
+                cv2.LINE_AA)
+
+        ################ BOUNDARY BOX ################
+        if(show_boundary_box):
+            cv2.rectangle(frame, (w_min, h_min), (w_max, h_max), (255, 0, 0), 2)
 
         cv2.imshow('Video', frame)
         
@@ -388,6 +421,8 @@ if __name__ == '__main__':
             man_move_camera('s')
         elif key_stroke & 0xFF == ord('d'):
             man_move_camera('d')
+        elif key_stroke & 0xFF == ord('t'):
+            show_text = not show_text
         
         prev_time = time.time()
 
