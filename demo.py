@@ -13,8 +13,8 @@ from pantilthat import *
 ap = argparse.ArgumentParser()
 # ap.add_argument("-v", "--verbose", action="store_true", default=0, help="Whether or not to display location messages in terminal")
 ap.add_argument("-bbb", "--show_blue_border_box", action="store_true", default=0, help="Draws a (blue) border boundary box which can dictate camera movement. Default: Show box")
-ap.add_argument("-d", "--show_person_box", action="store_true", default=0, help="Draws a (green) box around the person. Default: Show box")
-ap.add_argument("-s", "--still_camera", action="store_true", default=0, help="Keep camera Still when enabled (1); otherwise the camera moves (0). Default: Camera moves")
+ap.add_argument("-p", "--show_person_box", action="store_true", default=0, help="Draws a (green) box around the person. Default: Show box")
+ap.add_argument("-m", "--still_camera", action="store_true", default=0, help="Keep camera Still when enabled (1); otherwise the camera moves (0). Default: Camera moves")
 ap.add_argument("-c", "--is_cascade", action="store_true", default=0, help="Whether to use Haar Cascade (1) or YOLO (0). Default: Yolo (0)")
 ap.add_argument("-f", "--is_wear_fun_hat", action="store_true", default=0, help="Puts a fun hat on you. Works only with Haar Cascade ATM. Default: No fun hat")
 args = ap.parse_args()
@@ -36,6 +36,42 @@ w_max = 0
 h_min = 0
 h_max = 0
 ################ BOUNDARY BOX ################
+
+def man_move_camera(key_press):
+    cam_pan = get_pan()
+    cam_tilt = get_tilt()
+    move_x = 0
+    move_y = 0
+    
+    if(key_press.lower() == 'a'):
+        move_x = -2
+    elif(key_press.lower() == 'd'):
+        move_x = 2
+    else:
+        move_x = 0
+    
+    if(key_press.lower() == 's'):
+        move_y = -1
+    elif(key_press.lower() == 'w'):
+        move_y = 1
+    else:
+        move_y = 0
+
+    if((cam_pan + move_x < 90) & (cam_pan - move_x > -90)):
+        cam_pan += move_x
+        pan(int(cam_pan))
+        time.sleep(0.005)
+    else:
+        print(f'MAX PAN - cannot move:  {cam_pan + move_x}')
+
+    if((cam_tilt + move_y < 90) & (cam_tilt - move_y > -90)):
+        cam_tilt -= move_y
+        tilt(int(cam_tilt))
+        time.sleep(0.005)
+    else:
+        print(f'MAX TILT - cannot move:  {cam_tilt + move_y}')
+    
+    return
 
 def move_camera(x, y, w, h):
     if(is_camera_still):
@@ -223,6 +259,12 @@ def detect_video(video, yolo, all_classes):
     vout.release()
     camera.release()
     
+def reset_camera_position():
+    pan(0)
+    tilt(-20)
+    time.sleep(2)
+
+
 
 if __name__ == '__main__':
     cfg_file = 'data/custom-yolov4-tiny-detector.cfg'
@@ -233,8 +275,7 @@ if __name__ == '__main__':
     yolo = YOLO(0.6, 0.5, cfg_file, weights_file, all_classes)
 
     # Turn the camera to the default position
-    pan(0)
-    tilt(-20)
+    reset_camera_position()
 
 
     cap = cv2.VideoCapture(0) # Primary, Laptop Camera or rpi Camera
@@ -268,7 +309,7 @@ if __name__ == '__main__':
         # Horizontal-Flip for  Mirror-Image
         frame = cv2.flip(frame, 1)
 
-        if(is_cascade | args.is_cascade):
+        if(is_cascade):# | args.is_cascade):
             faces = faceCascade.detectMultiScale(frame, 1.1, 3)
             for (x, y, w, h) in faces:
                 # if(show_person_box):
@@ -325,18 +366,28 @@ if __name__ == '__main__':
             break
         elif key_stroke & 0xFF == ord('b'):
             show_boundary_box = not show_boundary_box
-        elif key_stroke & 0xFF == ord('d'):
+        elif key_stroke & 0xFF == ord('p'):
             show_person_box = not show_person_box
         elif key_stroke & 0xFF == ord('m'):
             is_camera_still = not is_camera_still
-        elif key_stroke & 0xFF == ord('s'):
-            is_camera_still = not is_camera_still
         elif key_stroke & 0xFF == ord('c'):
+            is_cascade = not is_cascade
+        elif key_stroke & 0xFF == ord('y'):
             is_cascade = not is_cascade
         elif key_stroke & 0xFF == ord('h'):
             is_wear_fun_hat = not is_wear_fun_hat
         elif key_stroke & 0xFF == ord('f'):
             is_wear_fun_hat = not is_wear_fun_hat
+        elif key_stroke & 0xFF == ord('r'):
+            reset_camera_position()
+        elif key_stroke & 0xFF == ord('w'):
+            man_move_camera('w')
+        elif key_stroke & 0xFF == ord('a'):
+            man_move_camera('a')
+        elif key_stroke & 0xFF == ord('s'):
+            man_move_camera('s')
+        elif key_stroke & 0xFF == ord('d'):
+            man_move_camera('d')
         
         prev_time = time.time()
 
